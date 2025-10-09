@@ -1,24 +1,8 @@
-/* 
-Vincent Sanchez
-August 27,2025
-Lab 22
-Added the parenthesis to the list of expressions
-This file is used to capture all of the values to send to yacc as well as act as the debugger
-*/
-
-/*                 Small LEX routine which returns two formal tokens (INTEGER and VARIABLE)
-                   along with single string elements like '+'.
- 
-                    This LEX definition is the companion to the docalc.y YACC routine which
-                   is a simple calculator
-
-                    Shaun Cooper
-                    January 2015
-*/
 %{
 
 int mydebug=0;
 int linecount = 1;
+#include "ast.h"
 #include "y.tab.h"
 %}
 
@@ -55,7 +39,7 @@ do      { return (T_DO);}
 "-"     { return (T_MINUS);}
 "*"     { return (T_MULT);}
 "/"     { return (T_DIVIDE);}
-"//".*    {linecount++; /* Ignoring comment lines */}
+"//".*    { /* Ignoring comment lines */}
 
 
 [a-zA-Z][a-zA-Z0-9_]*           {if (mydebug) fprintf(stderr,"Letter found\n");

@@ -1,20 +1,7 @@
-/*
-Vincent Sanchez
-9/8/2025
-This assignment is an introduction to using symbol tables implemented using linked lists.
-
-This code was pulled from Dr. Cooper's canvas page and changes were made to main as well 
-as each function was changed to recieve inputs.
-The main data structure used in this assignment is a linked list which include the symbol 
-name as well as the address and another struct that is the next node in the list.
-*/
-
-//added fetch address
-
 #include "symtable.h"
 #include <stdio.h>
 /* #include<conio.h> */
-#include <malloc.h>
+//#include <malloc.h>
 #include <string.h>
 #include <stdlib.h>
 

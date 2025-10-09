@@ -1,9 +1,3 @@
-/*
-Vincent Sanchez
-9/8/25
-The header file for symtable.c that includes all function prototypes
-*/
-
 #ifndef SYMTABLE_H
 #define SYMTABLE_H
 
