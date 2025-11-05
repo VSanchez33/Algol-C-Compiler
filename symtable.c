@@ -1,111 +1,191 @@
-#include "symtable.h"
-#include <stdio.h>
-/* #include<conio.h> */
-//#include <malloc.h>
+/*  Completely new symtable structure
+    From Dr. Shaun Cooper
+
+    Symbol Table --linked list headers
+    Used for Compilers class
+
+Modified Spring 2015 to allow for name to pointed to by symtable, instead of
+copied, since the name is copied
+into the heap
+
+Modified to have levels. A level 0 means global variable, other levels means
+in range of the function. 
+
+We start out our offsets at 0 (from stack pointer) for level 1,,,when we enter a
+functional declaration.
+
+We increment offset each time we insert a new variable. A variable is
+considered to be valid if it is found in the symbol table at our level or 
+lesser level. If at 0, then it is global.
+
+We return a pointer to the symbol table when a variable matches our creteria.
+
+We add a routine to remove variables at our level and above.
+*/
+
 #include <string.h>
-#include <stdlib.h>
+#include "ast.h"
+#include "symtable.h"
 
-int size = 0; // global variable used to keep track of the size of the list 
+int GTEMP = 0; /* Global Temp counter */
 
-//void main() 
-//{
-//} /* end of main */
-
-int FetchAddress (char * symbol)
+// PRE: Assume one up global variable GTEMP
+// POST: Returns string with the format _t%d and increments the global vairbal
+// USAGE: creates a variable name that is used to hold temporary, intermediate
+// values in the runtime enviroment
+char *CreateTemp()
 {
-    struct SymbTab * p;
-    p = Search(symbol);
-    if (p != NULL)
+    char hold[100];
+    char *s;
+    sprintf(hold, "_t%d", GTEMP++);
+    s = strdup(hold);
+    return (s);
+}
+
+/* Simple Insert into the symbol table with the size, type level that the name is
+being inserted into */
+// PRE: given elements for an item in the symbol table
+// POST: Inserts an item in the symbol table list provided
+// the symbol does not exists at the level
+struct SymbTab *Insert(char *name, enum DataTypes my_assigned_type, enum SYMBOL_SUBTYPE subtype, int level, int mysize, int offset)
+{
+    struct SymbTab *n;
+    n = Search(name, level, 0);
+    if (n != NULL)
     {
-        return p->addr;
+printf("\n\tThe name %s exists at level %d already in the symbol table\n\tDuplicate can't be inserted",name, level);
+return (NULL);
     }
     else
     {
-        //BARF
+        struct SymbTab *p;
+        p = malloc(sizeof(struct SymbTab));
+        p->name = name;
+        p->offset = offset;                  /* assign the offset */
+        p->level = level;                    /* assign the level */
+        p->mysize = mysize;                  /* assign the size */
+        p->Declared_Type = my_assigned_type; /* assign the Type */
+        p->SubType = subtype;                /* assign the Function */
+        p->next = NULL;
+        // Insert the record in the list ...
+        if (first == NULL)
+        {
+            first = p;
+        }
+        else
+        {
+            p->next = first;
+            first = p;
+        }
+        return (p);
     }
+    printf("\n\tLabel inserted\n");
 }
 
-void Insert(char* sym, int address) // recieves symbol name and address and adds it to the table
+/* print out a single symbol table entry -- for debugging */
+// PRE: Ptr to a symtabl structore
+// POST: output to the screen in human readable form
+void PrintSym(struct SymbTab *s)
 {
-    struct SymbTab *p; //creates a new node to be added to the list
-    p = malloc(sizeof(struct SymbTab));
-    //adds the data to the new node 
-    p->symbol = strdup(sym);
-    p->addr = address;
-    p->next = NULL;
-    if (size == 0) // if the list is empty, makes the new node the first and last of the list
-    {
-        first = p;
-        last = p;
-    }
-    else // adds the new node to the end of the list 
-    {
-        last->next = p;
-        last = p;
-    }
-    Display();
-    size++; // increases the size counter for the list 
-    printf("\n\tLabel inserted\n");
-} // end of insert
+    printf("\t%s\t\t%d\t\t%d\t%d\n", s->name, s->offset, s->level, s->Declared_Type);
+}
 
-void Display() //displays all the sybols in the table 
+/* General display to see what is in our symbol table */
+// PRE: depends on global variable first
+// POST: Formatted output of the symbol table
+void Display()
 {
     int i;
     struct SymbTab *p;
     p = first;
-    printf("\n\tSYMBOL\t\tADDRESS\n");
-    for (i = 0; i < size; i++) // iterates through the list and prints the symbol name and address of each symbol
+    printf("\n\n\n DISPLAY SYM TABLE\n\n\n");
+    printf("\n\tLABEL\t\tOffset \t\tLEVEL \ttype\n");
+    while (p != NULL)
     {
-        printf("\t%s\t\t%d\n", p->symbol, p->addr);
+        PrintSym(p);
         p = p->next;
     }
-} // end of display
+    printf("\n\n\n DISPLAY SYM TABLE\n\n\n");
+}
 
-struct SymbTab * Search(char *s) // searches the list to find a given symbol in the list
+/* Search for a symbol name at level or below. We have to do multiple passes into
+the symbol table because we have to find
+the name closest to us
+If recur is non-zero, then we look through all of the levels, otherwise, only our
+level
+We return a pointer to a SymbolTab structure so that we can use other
+functions/methods to get the attributes */
+// PRE: given a name and level and recure
+// POST: returns NULL if not there, otherwise a PTR to the element in the table
+// DETAIL: search will stop at first level if recur set to 0
+// search will continue struct until level is 0 if recur is 1
+struct SymbTab *Search(char name[], int level, int recur)
 {
     int i, flag = 0;
     struct SymbTab *p;
-    p = first;
-    for (i = 0; i < size; i++) // iterates through the list to look for the symbol
+    /* for each level, try to find our symbol */
+    while (level >= 0)
     {
-        if (strcmp(p->symbol, s) == 0)
+        p = first;
+        while (p != NULL)
         {
-            flag = 1;
-            return p; // returns the symbol pointer now 
+            if ((strcmp(p->name, name) == 0) && (p->level == level))
+                return p;
+            p = p->next;
         }
+        if (recur == 0)
+            return (NULL); /* we did not find it at our level */
+        level--;           /* check the next level up */
+    }
+    return NULL; /* did not find it, return 0 */
+}
+
+/* Remove all enteries that have the indicated level
+We need to take care about updating first pointer into the linked list when we
+are deleting edge elements */
+// PRE: level
+// POST: removes all symbol table entrues with level equal to or higher
+int Delete(int level)
+{
+    struct SymbTab *p, *f = NULL; /* we follow with pointer f */
+    int SIZE = 0;
+    p = first;
+    /* cruise through the list */
+    while (p != NULL)
+    {
+        /* do we match? */
+        if (p->level >= level)
+        { /* if it is the first in the list we have to update first, we know this
+        by f being NULL */
+            SIZE += p->mysize;
+            if (f == NULL)
+                first = p->next;
+            else /* not the first element */
+            {
+                f->next = p->next;
+            }
+            p = p->next;
+        }
+        else
+        {
+            /* update follow pointer, move the p pointer */
+            f = p;
+            p = p->next;
+        }
+    }
+    return (SIZE);
+}
+
+// PRE: No input
+// POST: boolen if table has a PROTOTYPE in it
+int Has_Proto()
+{
+    struct SymbTab *p = first;
+    while (p != NULL)
+    {
+        if (p->SubType == SYM_FUNCTION_PROTO)
+            return 1;
         p = p->next;
     }
-    return 0; // returns NULL now if not in list
-} // end of search
-
-void Delete(char *s) //deletes a given symbol from the table 
-{
-    struct SymbTab *p, *q;
-    p = first;
-    if (strcmp(first->symbol, s) == 0) // checks if the current node is the correct one and moves on to the next one if not
-        first = first->next;
-    else if (strcmp(last->symbol, s) == 0)
-    {
-        q = p->next;
-        while (strcmp(q->symbol, s) != 0)
-        {
-            p = p->next;
-            q = q->next;
-        }
-        p->next = NULL;
-        last = p;
-    }
-    else // removes the node from the list if it is the correct symbol
-    {
-        q = p->next;
-        while (strcmp(q->symbol, s) != 0)
-        {
-            p = p->next;
-            q = q->next;
-        }
-        p->next = q->next;
-    }
-    size--; //decreases the size counter of the list 
-    printf("\n\tAfter Deletion:\n");
-    Display();
-} // end of delete
+    return 0;
+}

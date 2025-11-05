@@ -1,19 +1,11 @@
 /* 
-ast.c 
-Vincent Sanchez
-October 12,2025
-Lab 6 
-The header file for ast.c that includes all the enums for the ast node types,
-datatypes, and operators. Also includes the ast data structure as well as all 
-of the function prototypes for ast.c
-*/
-
-/* 
 Abstract syntax tree code header file
 */
+
 #include <stdio.h>
 //#include <malloc.h>
 #include <stdlib.h>
+
 #ifndef AST_H
 #define AST_H
 extern int mydebug;
@@ -51,7 +43,8 @@ enum DataTypes
 {
     A_INTTYPE,
     A_VOIDTYPE,
-    A_BOOLEANTYPE
+    A_BOOLEANTYPE,
+    A_UNKNOWN
 };
 enum OPERATORS
 {
@@ -81,6 +74,7 @@ typedef struct ASTnodetype
     ///.. missing
     struct ASTnodetype *s1, *s2; /* used for holding IF and WHILE components --
     not very descriptive */
+    struct SymbTab *symbol;
 } ASTnode;
 /* uses malloc to create an ASTnode and passes back the heap address of the newley
 created node */
@@ -89,4 +83,6 @@ void PT(int howmany);
 ASTnode *program; // pointer to the tree
 /* Print out the abstract syntax tree */
 void ASTprint(int level, ASTnode *p);
+/* Checks parameters of definition and call to make sure they match */
+int check_params(ASTnode *actuals, ASTnode *formals);
 #endif // of AST_H

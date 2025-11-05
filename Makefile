@@ -1,9 +1,9 @@
 all:	compiler
 
-compiler:	compiler.y compiler.l ast.c ast.h
-		lex compiler.l
-		yacc -d compiler.y
-		gcc -o compiler lex.yy.c y.tab.c ast.c
+compiler:	compiler.y compiler.l ast.c ast.h symtable.c symtable.h
+			lex compiler.l
+			yacc -d compiler.y
+			gcc -o compiler lex.yy.c y.tab.c ast.c symtable.c
 
 clean:
 		rm -f compiler

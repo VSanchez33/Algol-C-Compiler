@@ -6,10 +6,12 @@ defining an enumerated nodetype so we can figure out what we need to
 do with this. The ENUM is basically going to be every non-terminal
 and terminal in our language
 */
+
 #include <stdio.h>
 //#include <malloc.h>
 #include <stdlib.h>
 #include "ast.h"
+#include "symtable.h"
 
 /* uses malloc to create an ASTnode and passes back the heap address of the newley
 created node */
@@ -49,12 +51,15 @@ char *DataTypeToString(enum DataTypes mydatatype)
     case A_VOIDTYPE:
         return ("void");
         break;
+
     case A_INTTYPE:
         return ("int");
         break;
+
     case A_BOOLEANTYPE:
         return ("boolean");
         break;
+
     default:
         printf("Unknown type in DataTypeToString\n");
         exit(1);
@@ -79,13 +84,15 @@ void ASTprint(int level, ASTnode *p)
         printf("%s", p->name);
         if (p->value > 0)
             printf("[%d]", p->value);
-        printf("\n");
+        printf(" with offset %d on level %d \n", p->symbol->offset, p->symbol->level);
         if (p->s1 != NULL)
             ASTprint(level, p->s1);
         break;
+
     case A_FUNDEC:
         PT(level);
-        printf("Function: %s %s \n", DataTypeToString(p->datatype), p->name);
+        printf("Function: %s %s", DataTypeToString(p->datatype), p->name);
+        printf(" with size %d\n", p->symbol->offset);
         PT(level+1);
         printf("(\n");
         ASTprint(level+2, p->s1); //parameters
@@ -94,14 +101,17 @@ void ASTprint(int level, ASTnode *p)
         printf(")\n");
         ASTprint(level+1, p->s2); //compound statement
         break;
+
     case A_DEC_LIST: 
         ASTprint(level, p->s1); //declaration
         ASTprint(level, p->s2); //dec list
         break;
+
     case A_STMT_LIST: 
         ASTprint(level, p->s1); //statement
         ASTprint(level, p->s2); //statement list
         break;
+
     case A_COMPOUND:
         PT(level);
         printf("BEGIN\n");
@@ -110,6 +120,7 @@ void ASTprint(int level, ASTnode *p)
         PT(level);
         printf("END\n");
         break;
+
     case A_WRITE:
         PT(level);
         printf("Write:\n");
@@ -122,6 +133,7 @@ void ASTprint(int level, ASTnode *p)
             ASTprint(level+1, p->s1); //it is not a string
         }
         break;
+
     case A_EXPR:
         PT(level);
         printf("Expression: ");
@@ -130,39 +142,51 @@ void ASTprint(int level, ASTnode *p)
         case A_PLUS:
             printf("+\n");
             break;
+
         case A_MINUS:
             printf("-\n");
             break;
+
         case A_TIMES:
             printf("*\n");
             break;
+
         case A_DIVIDE:
             printf("/\n");
             break;
+
         case A_AND:
             printf("and\n");
             break;
+
         case A_OR:
             printf("or\n");
             break;
+
         case A_LE:
             printf("<=\n");
             break;
+
         case A_LT:
             printf("<\n");
             break;
+
         case A_GT:
             printf(">\n");
             break;
+
         case A_GE:
             printf(">=\n");
             break;
+
         case A_EQ:
             printf("==\n");
             break;
+
         case A_NE:
             printf("!=\n");
             break;
+
         default:
             printf("Unknown operator in A_EXPR ASTprint\n");
             printf("Exiting expression in ASTprint immediately\n");
@@ -171,16 +195,19 @@ void ASTprint(int level, ASTnode *p)
         ASTprint(level+1, p->s1);
         ASTprint(level+1, p->s2);
         break;
+
     case A_NUM: // is a leaf
         PT(level);
         printf("Num value: %d\n", p->value);
         break;
+
     case A_PARAM_LIST:
         ASTprint(level+1, p->s1);
         if(p->s2 != NULL)
             printf("\n");
         ASTprint(level, p->s2);
         break;
+
     case A_PARAM:
         PT(level);
         printf("Parameter:\n");
@@ -188,12 +215,15 @@ void ASTprint(int level, ASTnode *p)
         if (p->datatype == A_VOIDTYPE)
             printf("void");
         else {
-            if(p->s1 == NULL)
+            if(p->value != -1)
                 printf("%s %s", DataTypeToString(p->datatype), p->name);
             else
                 printf("%s %s[]", DataTypeToString(p->datatype), p->name);
         }
+        if (p->symbol != NULL)
+            printf(" with offset %d on level %d", p->symbol->offset, p->symbol->level);
         break;
+
     case A_ASSIGN:
         PT(level);
         printf("Assignment:\n");
@@ -204,6 +234,7 @@ void ASTprint(int level, ASTnode *p)
         printf("Right hand side:\n");
         ASTprint(level+2, p->s2);
         break;
+
     case A_VAR:
         PT(level);
         printf("Var name: %s\n", p->name);
@@ -215,6 +246,7 @@ void ASTprint(int level, ASTnode *p)
             printf("]\n");
         }
         break;
+
     case A_IFSTMT:
         PT(level);
         printf("If Statement:\n");
@@ -232,6 +264,7 @@ void ASTprint(int level, ASTnode *p)
         PT(level);
         printf("END IF\n");
         break;
+
     case A_ITERATION:
         PT(level);
         printf("While:\n");
@@ -242,17 +275,20 @@ void ASTprint(int level, ASTnode *p)
         printf("While body:\n");
         ASTprint(level+2, p->s2);
         break;
+
     case A_RETURN:
         PT(level);
         printf("Return\n");
         if (p->s1 != NULL)
             ASTprint(level+1, p->s1);
         break;
+
     case A_READ:
         PT(level);
         printf("Read\n");
         ASTprint(level+1, p->s1);
         break;
+
     case A_CALL:
         PT(level);
         printf("Call: %s\n", p->name);
@@ -263,32 +299,56 @@ void ASTprint(int level, ASTnode *p)
             PT(level+1);
             printf(")\n");
         }
+        else{
+            PT(level+1);
+            printf("(\n");
+            PT(level+1);
+            printf(")\n");
+        }
         break;
+
     case A_ARGS:
         PT(level);
         printf("Call Argument:\n");
         ASTprint(level+1, p->s1);
         ASTprint(level, p->s2);
         break;
+
     case A_TRUE:
         PT(level+1);
         printf("Boolean with value: 1\n");
         break;
+
     case A_FALSE:
         PT(level+1);
         printf("Boolean with value: 0\n");
         break;
+
     case A_NOT:
         PT(level);
         printf("Not:\n");//add rest of operators
         ASTprint(level+1, p->s1);
         break;
+
     default:
         printf("unknown type in ASTprint\n");
         printf("Exiting ASTprint immediately\n");
         exit(1);
     } // of switch
 } // of ASTprint
+
+/* Checks parameters of definition and call to make sure they match */
+// PRE: handed two lists that represent formals and actauls
+// POST: returns 1 if they are the same length and each element is type consistent
+//       returns 0 otherwise
+int check_params(ASTnode *actuals, ASTnode *formals){
+    if (actuals == NULL && formals == NULL) return 1;
+    if (actuals == NULL || formals == NULL) return 0;
+    if (actuals->datatype != formals->datatype) return 0;
+    if ((actuals->s1->nodetype == A_VAR) && (actuals->s1->symbol->SubType == SYM_ARRAY) && (actuals->s1->s1 == NULL))
+        return 0;
+    return (check_params(actuals->s2, formals->s2));
+}
 
 /* dummy main program so I can compile for syntax error independently
 main()

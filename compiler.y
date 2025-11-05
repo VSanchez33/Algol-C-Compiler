@@ -4,17 +4,22 @@
 #include <stdio.h>
 #include <ctype.h>
 #include "ast.h"
+#include "symtable.h"
 
 extern int yylex();
 extern int linecount;
+
+int level = 0; // how many compound statements deep we are
+int offset = 0; // how many words have we seen at global or inside func 
+int gOffset; // holder for global offset when we enter and exit func definition 
+int maxOffset; // total number of words a function needs
+
 
 void yyerror (s)  /* Called by yyparse on error */
      char *s;
 {
   printf ("%s on line number %d\n", s, linecount);
 }
-
-int yylex();
 
 %}
 /*  defines the start symbol, what values come back from LEX and how the operators are associated  */
@@ -81,7 +86,8 @@ Var_Declaration : Type_Specifier Var_List ';'
 						ASTnode* p;
 						p = $2;
 						while (p != NULL) {
-							p->datatype = $1;
+							//p->datatype = $1;
+							p->symbol->Declared_Type = $1;
 							p = p->s1;
 						} // end of while
 					}
@@ -89,27 +95,63 @@ Var_Declaration : Type_Specifier Var_List ';'
 
 Var_List	: T_ID 
 				{ 
-					$$ = ASTCreateNode(A_VARDEC);
-					$$->name = $1;
+					if (Search($1, level, 0) == NULL) { //symbol not there
+						$$ = ASTCreateNode(A_VARDEC);
+						$$->name = $1;
+						$$->symbol = Insert($1, A_UNKNOWN, SYM_SCALAR, level, 1, offset);
+						offset += 1;
+					} // end if 
+					else {
+						yyerror($1);
+						yyerror("already defined");
+						exit(1);
+					} // end else
 				}
 			| T_ID '[' T_NUM ']' 
 				{
-					$$ = ASTCreateNode(A_VARDEC);
-					$$->name = $1;
-					$$->value = $3;
+					if (Search($1, level, 0) == NULL) { //symbol not there
+						$$ = ASTCreateNode(A_VARDEC);
+						$$->name = $1;
+						$$->value = $3;
+						$$->symbol = Insert($1, A_UNKNOWN, SYM_ARRAY, level, $3, offset);
+						offset += $3;
+					} // end if 
+					else {
+						yyerror($1);
+						yyerror("already defined");
+						exit(1);
+					} // end else
 				}
 			| T_ID ',' Var_List 
 				{
-					$$ = ASTCreateNode(A_VARDEC);
-					$$->name = $1;
-					$$->s1 = $3; //sets next travel path to the Var_List
+					if (Search($1, level, 0) == NULL) { //symbol not there
+						$$ = ASTCreateNode(A_VARDEC);
+						$$->name = $1;
+						$$->symbol = Insert($1, A_UNKNOWN, SYM_SCALAR, level, 1, offset);
+						offset += 1;
+						$$->s1 = $3; //sets next travel path to the Var_List
+					} // end if
+					else {
+						yyerror($1);
+						yyerror("already defined");
+						exit(1);
+					} // end else
 				}
 			| T_ID '[' T_NUM ']' ',' Var_List
 				{
-					$$ = ASTCreateNode(A_VARDEC);
-					$$->name = $1;
-					$$->s1 = $6; //sets next travel path to the Var_List
-					$$->value = $3;
+					if (Search($1, level, 0) == NULL) { //symbol not there
+						$$ = ASTCreateNode(A_VARDEC);
+						$$->name = $1;
+						$$->value = $3;
+						$$->symbol = Insert($1, A_UNKNOWN, SYM_ARRAY, level, $3, offset);
+						offset += $3;
+						$$->s1 = $6;
+					} // end if 
+					else {
+						yyerror($1);
+						yyerror("already defined");
+						exit(1);
+					} // end else
 				}
 			;       /* end Var_List */
 
@@ -118,13 +160,34 @@ Type_Specifier  : T_INT { $$ = A_INTTYPE; }
                 | T_BOOLEAN {$$ = A_BOOLEANTYPE; }
                 ;       /* end Type_Specifier */
 
-Fun_Declaration : Type_Specifier T_ID '(' Params ')' Compound_Stmt
+Fun_Declaration : Type_Specifier T_ID '(' 
+					{ //checks if function name is know, if it is BARF. if not put it in symbol table
+						if (Search($2, level, 0) == NULL) {
+							Insert($2, $1, SYM_FUNCTION, level, 0, 0);
+							gOffset = offset;
+							offset = 2; // we need two for SP and RA 
+							maxOffset = offset;
+						} // end if
+						else {
+							yyerror($2);
+							yyerror("Cannot creat function, name is in use");
+							exit(1);
+						} // end else
+					}
+				Params ')' 
+					{ //update symtable with parameters
+						Search($2, level, 0)->fparms = $5;
+					}
+				Compound_Stmt
                     { 
                         $$ = ASTCreateNode(A_FUNDEC); 
                         $$->name = $2;
                         $$->datatype = $1;
-                        $$->s1 = $4;
-                        $$->s2 = $6;
+                        $$->s1 = $5;
+                        $$->s2 = $8;
+						$$->symbol = Search($2, level, 0);
+						$$->symbol->offset = maxOffset;
+						offset = gOffset;
                     }
                 ;       /* end Fun_Declaration */
 
@@ -157,21 +220,52 @@ Param   : Type_Specifier T_ID
 				$$ = ASTCreateNode(A_PARAM);
 				$$->datatype = $1;
 				$$->name = $2;
+
+				if (Search($2, 1, 0) == NULL) { // need to insert into symbol table
+					$$->symbol = Insert($2, $1, SYM_SCALAR, level+1, 1, offset);
+					offset += 1;
+					$$->datatype = $$->symbol->Declared_Type;
+				}
+				else {
+					yyerror($2);
+					yyerror("Parameter name already used");
+					exit(1);
+				}
 			}
         | Type_Specifier T_ID '[' ']'
             { 
 				$$ = ASTCreateNode(A_PARAM);
 				$$->datatype = $1;
 				$$->name = $2;
-				$$->s1 = $$;
+				$$->value = -1;
+
+				if (Search($2, 1, 0) == NULL) { // need to insert into symbol table
+					$$->symbol = Insert($2, $1, SYM_ARRAY, level+1, 1, offset);
+					offset += 1;
+					$$->datatype = $$->symbol->Declared_Type;
+				}
+				else {
+					yyerror($2);
+					yyerror("Parameter name already used");
+					exit(1);
+				}
 			}
         ;       /* end Param */
 
-Compound_Stmt   : T_BEGIN Local_Declarations Statement_List T_END
+Compound_Stmt   : T_BEGIN 
+					{
+						level++;		
+					}
+				Local_Declarations Statement_List T_END
 					{ 
 						$$ = ASTCreateNode(A_COMPOUND); 
-						$$->s1 = $2;
-						$$->s2 = $3;
+						$$->s1 = $3;
+						$$->s2 = $4;
+						if (offset > maxOffset)
+							maxOffset = offset;
+						Display();
+						offset = offset - Delete(level);
+						level--;
 					}
                 ;       /* end Compound_Stmt */
 
@@ -270,9 +364,18 @@ Write_Stmt  : T_WRITE Expression ';'
 
 Assignment_Stmt : Var '=' Simple_Expression ';'
 					{
+						if ($1->datatype != $3->datatype){
+							yyerror("Type mismatch on expression");
+							exit(1);
+						} // end if
 						$$ = ASTCreateNode(A_ASSIGN);
 						$$->s1 = $1;
 						$$->s2 = $3;
+						$$->datatype = $1->datatype;
+						$$->name = CreateTemp();
+						$$->symbol = Insert($$->name, $1->datatype, SYM_SCALAR, level, 1, offset);
+						offset += 1;
+
 					}
                 ;       /* end Assignment_Stmt */
 
@@ -281,23 +384,70 @@ Expression  : Simple_Expression { $$ = $1; }
 
 Var : T_ID  
         { 
+			struct SymbTab *p;
+			p = Search($1, level, 1);
+
+			if (p == NULL){
+				yyerror($1);
+				yyerror("Variable used but not defined");
+				exit(1);
+			} // end if
+
+			if (p->SubType != SYM_SCALAR) {
+				yyerror($1);
+				yyerror("Variable is wrong subtype");
+				exit(1);
+			}
+
 			$$ = ASTCreateNode(A_VAR);
 			$$->name = $1; 
+			$$->symbol = p;
+			$$->datatype = p->Declared_Type;
 		}
     | T_ID '[' Expression ']'
         { 
+			struct SymbTab *p;
+			p = Search($1, level, 1);
+
+			if (p == NULL){
+				yyerror($1);
+				yyerror("Variable used but not defined");
+				exit(1);
+			} // end if
+
+			if (p->SubType != SYM_ARRAY) {
+				yyerror($1);
+				yyerror("Variable is wrong subtype");
+				exit(1);
+			}
+
+			if ($3->datatype != A_INTTYPE){
+				yyerror("Array index must be int");
+				exit(1);
+			}
+
 			$$ = ASTCreateNode(A_VAR);
-			$$->name = $1;
+			$$->name = $1; 
 			$$->s1 = $3;
+			$$->symbol = p;
+			$$->datatype = p->Declared_Type;
 		}
     ;   /* end Var */
 
 Simple_Expression   : Simple_Expression Rel_Op Additive_Expression
 						{
+							if($1->datatype != $3->datatype){
+								yyerror("Type mismatch on expression");
+								exit(1);
+							} // end if
 							$$ = ASTCreateNode(A_EXPR);
 							$$->s1 = $1;
 							$$->s2 = $3;
 							$$->operator = $2;
+							$$->datatype = A_BOOLEANTYPE;
+							$$->name = CreateTemp();
+							$$->symbol = Insert($$->name, $1->datatype, SYM_SCALAR, level, 1, offset);
+							offset += 1;
 						}
                     | Additive_Expression { $$ = $1; }
                     ;   /* end Simple_Expression */
@@ -312,10 +462,18 @@ Rel_Op	: T_LE { $$ = A_LE; }
 
 Additive_Expression : Additive_Expression Add_Op Term
 						{
+							if($1->datatype != $3->datatype){
+								yyerror("Type mismatch on expression");
+								exit(1);
+							} // end if
 							$$ = ASTCreateNode(A_EXPR);
 							$$->s1 = $1;
 							$$->s2 = $3;
 							$$->operator = $2;
+							$$->datatype = $1->datatype;
+							$$->name = CreateTemp();
+							$$->symbol = Insert($$->name, $1->datatype, SYM_SCALAR, level, 1, offset);
+							offset += 1;
 						}
                     | Term { $$ = $1; }
                     ;   /* end Additive_Expression */
@@ -326,10 +484,18 @@ Add_Op  : T_PLUS { $$ = A_PLUS; }
 
 Term    : Term Mult_Op Factor
 			{
+				if($1->datatype != $3->datatype){
+					yyerror("Type mismatch on expression");
+					exit(1);
+				}
 				$$ = ASTCreateNode(A_EXPR);
 				$$->s1 = $1;
 				$$->s2 = $3;
 				$$->operator = $2;
+				$$->datatype = $1->datatype;
+				$$->name = CreateTemp();
+				$$->symbol = Insert($$->name, $1->datatype, SYM_SCALAR, level, 1, offset);
+				offset += 1;
 			}
         | Factor { $$ = $1; }
         ;       /* end Term */
@@ -346,6 +512,7 @@ Factor  : '(' Expression ')'
 			{
 				$$ = ASTCreateNode(A_NUM);
 				$$->value = $1;
+				$$->datatype = A_INTTYPE;
 			}
         | Var 
 			{
@@ -358,23 +525,54 @@ Factor  : '(' Expression ')'
         | T_TRUE
 			{
 				$$ = ASTCreateNode(A_TRUE);
+				$$->datatype = A_BOOLEANTYPE;
 			}
         | T_FALSE
 			{
 				$$ = ASTCreateNode(A_FALSE);
+				$$->datatype = A_BOOLEANTYPE;
 			}
         | T_NOT Factor
 			{
+				if ($2->datatype != A_BOOLEANTYPE){
+					yyerror("Not operator expects boolean");
+					exit(1);
+				}
 				$$ = ASTCreateNode(A_NOT);
 				$$->s1 = $2;
+				$$->datatype = A_BOOLEANTYPE;
 			}
         ;      /* end Factor */ 
 
 Call    : T_ID '(' Args ')'
-            { 
+            { // check if it is in symtable
+				struct SymbTab *p;
+				p = Search($1, 0, 0);
+
+				if (p == NULL){
+					yyerror($1);
+					yyerror("Function name not defined");
+					exit(1);
+				} // end if
+
+				if (p->SubType != SYM_FUNCTION){
+					yyerror($1);
+					yyerror("Function name is not defined as function");
+					exit(1);
+				} // end if
+				
+				if (check_params($3, p->fparms) == 0){
+					// they do not match
+					yyerror($1);
+					yyerror("paramater usage is incorrect");
+					exit(1);
+				} // end if
+				
 				$$ = ASTCreateNode(A_CALL);
 				$$->name = $1;
 				$$->s1 = $3;
+				$$->symbol = p;
+				$$->datatype = $$->symbol->Declared_Type;
 			}
         ;       /* end Call */
 
@@ -390,19 +588,29 @@ Arg_List    : Expression
 				{ 
 					$$ = ASTCreateNode(A_ARGS);
 					$$->s1 = $1;
+					$$->datatype = $1->datatype;
+					$$->name = CreateTemp();
+					$$->symbol = Insert($$->name, $$->datatype, SYM_SCALAR, level, 1, offset);
+					offset++;
 				}
             | Expression ',' Arg_List
 				{ 
 					$$ = ASTCreateNode(A_ARGS);
 					$$->s1 = $1;
 					$$->s2 = $3; 
+					$$->datatype = $1->datatype;
+					$$->name = CreateTemp();
+					$$->symbol = Insert($$->name, $$->datatype, SYM_SCALAR, level, 1, offset);
+					offset++;
 				}
             ;   /* end Arg_List */
 
 %%      /* end of rules, start of program */
 
 int main()
-{ yyparse();
-        ASTprint(0, program);
+{ 
+	yyparse();
+	Display();	
+    ASTprint(0, program);
 }
                                                    
