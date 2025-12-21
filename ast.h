@@ -15,7 +15,6 @@ enum ASTtype
 {
     A_PROGRAM,
     A_VARDEC,
-    A_FUNCTIONDEC,
     A_IDENT,
     A_EXPR,
     A_IFSTMT,
@@ -70,8 +69,8 @@ typedef struct ASTnodetype
     enum OPERATORS operator;
     enum DataTypes datatype;
     char *name;
+    char *label;
     int value;
-    ///.. missing
     struct ASTnodetype *s1, *s2; /* used for holding IF and WHILE components --
     not very descriptive */
     struct SymbTab *symbol;

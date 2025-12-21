@@ -1,22 +1,38 @@
-int y,Z[100];
+int x[5];
 
-int f(int b)
+int func(int i, int j) 
 begin 
- int y;
- begin  int x[10];
-  x[2+3-5]=b + f(5+x[2]*b);
- end
- begin  int x[10];
-  x[2+3-5]=b + f(5+x[2]*b);
- end
+    while i >= 0 do
+    begin 
+        write "Array val: ";
+        write x[i]; 
+        write "\n";
+        i = i - 1; 
+    end
+
+    if x[1] == 5 then 
+    begin
+        return i or j; 
+    end
+
+    else
+    begin 
+        return i and j;
+    end
+    endif
 end
 
-int z;
-
-int main(int arg1, int arg2[])
+void main(void) 
 begin
-   write  f(arg1 + arg2[3+5] -z + y);
-   write  f(arg1 + arg2[3+5] -z + y);
+    int i; 
+    i = 0; 
 
+    while i < 5 do 
+    begin
+        write "Enter array val: ";
+        read x[i]; 
+        i = i + 1; 
+    end
 
+    write func(i-1, 1000); 
 end

@@ -55,6 +55,7 @@ struct SymbTab *Insert(char *name, enum DataTypes my_assigned_type, enum SYMBOL_
 struct SymbTab *Search(char name[], int level, int recur);
 static struct SymbTab *first = NULL; /* global pointers into the symbol table */
 char *CreateTemp();
+char *CreateLabel();
 int Has_Proto();
 
 #endif

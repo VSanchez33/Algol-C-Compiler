@@ -3,8 +3,10 @@
         /* begin specs */
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 #include "ast.h"
 #include "symtable.h"
+#include "emit.h"
 
 extern int yylex();
 extern int linecount;
@@ -19,6 +21,7 @@ void yyerror (s)  /* Called by yyparse on error */
      char *s;
 {
   printf ("%s on line number %d\n", s, linecount);
+  exit(1);
 }
 
 %}
@@ -193,8 +196,7 @@ Fun_Declaration : Type_Specifier T_ID '('
 
 Params  : T_VOID 
 			{ 
-				$$ = ASTCreateNode(A_PARAM);
-				$$->datatype = A_VOIDTYPE;
+				$$ = NULL;
 			}
         | Param_List 
 			{ 
@@ -263,7 +265,7 @@ Compound_Stmt   : T_BEGIN
 						$$->s2 = $4;
 						if (offset > maxOffset)
 							maxOffset = offset;
-						Display();
+						//Display();
 						offset = offset - Delete(level);
 						level--;
 					}
@@ -375,7 +377,6 @@ Assignment_Stmt : Var '=' Simple_Expression ';'
 						$$->name = CreateTemp();
 						$$->symbol = Insert($$->name, $1->datatype, SYM_SCALAR, level, 1, offset);
 						offset += 1;
-
 					}
                 ;       /* end Assignment_Stmt */
 
@@ -607,10 +608,44 @@ Arg_List    : Expression
 
 %%      /* end of rules, start of program */
 
-int main()
+int main(int argc, char * argv[])
 { 
+	FILE *fp = NULL;
+	char s[100];
+
+	for (int i = 1; i < argc; i++){
+		if (strcmp("-d", argv[i]) == 0) 
+			mydebug = 1;
+
+		if (strcmp("-o", argv[i]) == 0) {
+			//assuming that argv[i+1] is on the line, we are not gonna check
+			strcpy(s, argv[i+1]);
+			strcat(s, ".asm");
+
+			if (mydebug) 
+				printf("opening file %s\n", s);
+
+			fp = fopen(s, "w");
+			if (fp == NULL) {
+				printf("Unable to open %s\n", s);
+				exit(1);
+			} //end of fopen
+		} //end of strcmp -o
+	} //end of for loop
+
+	if (fp == NULL) {
+		printf("No filename provided, must use -o option\n");
+		exit(1);
+	} //end of if
+
 	yyparse();
-	Display();	
-    ASTprint(0, program);
-}
+
+	if (mydebug){
+		Display();	
+    	ASTprint(0, program);
+	} //end of if
+
+	EMIT(program, fp);
+	printf("It works :D\n");
+} //end of main
                                                    

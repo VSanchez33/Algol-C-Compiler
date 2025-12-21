@@ -1,5 +1,6 @@
 /*  Completely new symtable structure
     From Dr. Shaun Cooper
+    Added CreateLabel for emitting strings or jumps
 
     Symbol Table --linked list headers
     Used for Compilers class
@@ -28,9 +29,10 @@ We add a routine to remove variables at our level and above.
 #include "symtable.h"
 
 int GTEMP = 0; /* Global Temp counter */
+int GLABEL = 0; /* Global Label counter*/
 
 // PRE: Assume one up global variable GTEMP
-// POST: Returns string with the format _t%d and increments the global vairbal
+// POST: Returns string with the format _t%d and increments the global variable
 // USAGE: creates a variable name that is used to hold temporary, intermediate
 // values in the runtime enviroment
 char *CreateTemp()
@@ -38,6 +40,18 @@ char *CreateTemp()
     char hold[100];
     char *s;
     sprintf(hold, "_t%d", GTEMP++);
+    s = strdup(hold);
+    return (s);
+}
+
+// PRE: Assume one up global variable GLABEL
+// POST: Returns string with the format _L%d and increments GLABEL
+// USAGE: creates a label name used in MIPS jump, if/else, or while
+char *CreateLabel()
+{
+    char hold[100];
+    char *s;
+    sprintf(hold, "_L%d", GLABEL++);
     s = strdup(hold);
     return (s);
 }
